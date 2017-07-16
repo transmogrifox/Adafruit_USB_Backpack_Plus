@@ -3,7 +3,10 @@ Complete rewrite by CanyonCasa of Enchanted Engineering
 to provide I/O and a number of other enhancements.
 See BACKPACK_PLUS_README.md for details
 
-Derived from...
+Code formatting and addition of config splash enable/disable function
+by The Transmogrifox, 2017.
+
+Derived from
 
 Matrix-orbitalish compatible LCD driver with USB and Serial
 For use with Teensy 1.0 core on AT90USB162 chips
@@ -27,7 +30,7 @@ All text above must be included in any redistribution
 #include <util/delay.h>
 #include <stdarg.h>
 
-// code parameters...
+// code parameters
 #define VERSION                     "+17G1"          // '+'+YEAR+ALPHA_MONTH+VERSION
 #define RELATIVE                    true
 #define ABSOLUTE                    false
@@ -57,7 +60,7 @@ All text above must be included in any redistribution
 #define DUMPENABLE                  4               // enable debug dump of virtual display data
 #define DUMPVD                      64              // Dump virtual display data immediately
 
-// I/O pin declarations...
+// I/O pin declarations
 // LCD I/O pins
 #define D4                          1               // PD1
 #define D5                          4               // PD4
@@ -121,7 +124,7 @@ All text above must be included in any redistribution
 #define EXTENDED_CODE_TEST          0xDF            // reserved for code testing
 #define MATRIX_COMMAND_PREFIX       0xFE            // prefix for all commands
 
-// EEPROM storage of the current state - unset EEPROM cells reads as 255 ...
+// EEPROM storage of the current state - unset EEPROM cells reads as 255
 #define COLS_ADDR                   0
 #define ROWS_ADDR                   1
 #define CONTRAST_ADDR               2
@@ -151,7 +154,7 @@ All text above must be included in any redistribution
 #define PROGMEM __attribute__((section(".progmem.data")))
 #endif
 
-// Arduino .ino script define and prototype declaration insertions...
+// Arduino .ino script define and prototype declaration insertions
 #include "Arduino.h"
 void setup();
 void loop();
@@ -186,7 +189,7 @@ uint8_t gpioMask = 0xFF;                          // read mask default
 uint8_t COLS = EEPROM.read(COLS_ADDR);
 uint8_t ROWS = EEPROM.read(ROWS_ADDR);
 // create a virtual display that mimics LCD...
-// Enables scrolling, backspace, splash screen save, debug dump, ...
+// Enables scrolling, backspace, splash screen save, debug dump
 // calls to virtual display change both the virtual display content and the LCD
 // while calls direct to lcd will not track virtual display
 // only handles calls that effect displayed text
@@ -207,66 +210,74 @@ elapsedMillis since = 0;
 uint8_t cmdFlags = 0x00;                          // command mode debug flags
 
 
-// follow Arduino style setup and loop functions...
-void setup() {
-  // setup display hardware
-  setBaud((getBaud()>115200) ? 9600 : getBaud());
-  setSize((COLS>MAXCOLS)?DEFAULTCOLS:COLS,(ROWS>MAXROWS)?DEFAULTROWS:ROWS);  // default display size
-  pinMode(CONTRASTPIN, OUTPUT);
-  pinMode(REDLITE, OUTPUT);
-  pinMode(GREENLITE, OUTPUT);
-  pinMode(BLUELITE, OUTPUT);
-  // configure all GPIO as defined in EEPROM, default "safe" INPUT_PULLUP
-  for(uint8_t i=0; i<4; i++) {
-    gpioPinMode(i,EEPROM.read(GPIO_START_STATE_ADDR+i));
-  }
-  gpioMask = EEPROM.read(GPIO_MASK_ADDR);
-  gpioPort = gpioRead(); // get intial state after setting up pins
-  // for the initial 'screen flash' we want to use default settings:
-  lcd.begin(COLS,ROWS);
-  loadCustomCharBank(0);
-  display(1);
+// follow Arduino style setup and loop functions
+void setup()
+{
+    // setup display hardware
+    setBaud((getBaud()>115200) ? 9600 : getBaud());
+    setSize((COLS>MAXCOLS)?DEFAULTCOLS:COLS,(ROWS>MAXROWS)?DEFAULTROWS:ROWS);  // default display size
+    pinMode(CONTRASTPIN, OUTPUT);
+    pinMode(REDLITE, OUTPUT);
+    pinMode(GREENLITE, OUTPUT);
+    pinMode(BLUELITE, OUTPUT);
+    // configure all GPIO as defined in EEPROM, default "safe" INPUT_PULLUP
+    for(uint8_t i=0; i<4; i++)
+    {
+        gpioPinMode(i,EEPROM.read(GPIO_START_STATE_ADDR+i));
+    }
+    gpioMask = EEPROM.read(GPIO_MASK_ADDR);
+    gpioPort = gpioRead(); // get intial state after setting up pins
+    // for the initial 'screen flash' we want to use default settings:
+    lcd.begin(COLS,ROWS);
+    loadCustomCharBank(0);
+    display(1);
 
-  // configuration message to screen
-  uint8_t dsplsh = EEPROM.read(BAUD_SPLASH_DISABLE);
-  if(dsplsh != 1) {
-      if (dsplsh != 0) //if it's not a 1, then it's garbage and this EEPROM  address should be set to default
-          eeSave(BAUD_SPLASH_DISABLE, 0);
-      lcd.clear();
-      lcd.spf(F("USB/Ser RGB Bkpk"));
-      lcd.setCursor(0,1);
-      lcd.spf(F("%4i00/8N1 %s"),(int)(getBaud()/100),VERSION);
-      delayMS(500);
+    // configuration message to screen
+    uint8_t dsplsh = EEPROM.read(BAUD_SPLASH_DISABLE);
+    if(dsplsh != 1)
+    {
+        if (dsplsh != 0) // if it's not a 1, then it's garbage and this EEPROM
+                         // address should be set to default
+            eeSave(BAUD_SPLASH_DISABLE, 0);
+        lcd.clear();
+        lcd.spf(F("USB/Ser RGB Bkpk"));
+        lcd.setCursor(0,1);
+        lcd.spf(F("%4i00/8N1 %s"),(int)(getBaud()/100),VERSION);
+        delayMS(500);
     }
 
-  // now setup as defined in EEPROM
-  red = EEPROM.read(BACKLIGHT_R_ADDR);
-  green = EEPROM.read(BACKLIGHT_G_ADDR);
-  blue = EEPROM.read(BACKLIGHT_B_ADDR);
-  brightness = EEPROM.read(BACKLIGHT_BRIGHTNESS_ADDR);
-  contrast = EEPROM.read(CONTRAST_ADDR);
-  display(1);
+    // now setup as defined in EEPROM
+    red = EEPROM.read(BACKLIGHT_R_ADDR);
+    green = EEPROM.read(BACKLIGHT_G_ADDR);
+    blue = EEPROM.read(BACKLIGHT_B_ADDR);
+    brightness = EEPROM.read(BACKLIGHT_BRIGHTNESS_ADDR);
+    contrast = EEPROM.read(CONTRAST_ADDR);
+    display(1);
 
-  // do splash screen
-  if (EEPROM.read(SPLASH_ADDR) == 0xFF) { // default
-    lcd.clear();
-    lcd.spf(F("USB/Ser RGB Bpk+"));
-    lcd.setCursor(0,1);
-    lcd.spf(F("CanyonCasa"));
-  }
-  else {
-    lcd.clear();
-    for (uint8_t i=0; i<ROWS; i++) {
-      virtualCursorPosition(1,i+1,ABSOLUTE);
-      for (uint8_t j=0; j<COLS; j++) {
-        // manual write since virtualWrite may scroll
-        lcd.write(EEPROM.read(SPLASH_ADDR + i*COLS + j));
-      };
+    // do splash screen
+    if (EEPROM.read(SPLASH_ADDR) == 0xFF)   // default
+    {
+        lcd.clear();
+        lcd.spf(F("USB/Ser RGB Bpk+"));
+        lcd.setCursor(0,1);
+        lcd.spf(F("CanyonCasa"));
+    }
+    else
+    {
+        lcd.clear();
+        for (uint8_t i=0; i<ROWS; i++)
+        {
+            virtualCursorPosition(1,i+1,ABSOLUTE);
+            for (uint8_t j=0; j<COLS; j++)
+            {
+                // manual write since virtualWrite may scroll
+                lcd.write(EEPROM.read(SPLASH_ADDR + i*COLS + j));
+            };
+        };
     };
-  };
-  for (uint8_t d=0;d<EEPROM.read(SPLASH_DELAY_ADDR);d++)
-    delayMS(100);
-  virtualClear();
+    for (uint8_t d=0; d<EEPROM.read(SPLASH_DELAY_ADDR); d++)
+        delayMS(100);
+    virtualClear();
 }
 
 // basic loop operation:
@@ -274,479 +285,575 @@ void setup() {
 //      for character parse/execute command or write to LCD
 //    poll GPIO for changes
 //    check for timedown of display timer
-void loop() {
-  uint8_t tmp;
-  // look for serial data input
-  if (serialAvailable()) {
-    tmp = serialBlockingRead();
-    if (tmp != MATRIX_COMMAND_PREFIX) {
-      virtualWrite(tmp);  // not a command, just print the text!
-    }
-    else {
-      parseCommand();   // it marks a command, parse it!
-    }
-  };
-  // when not waiting on serial, poll for input port changes...
-  // ~laxy interrupt and debounce.
-  tmp = gpioRead();
-  if (tmp!=gpioPort) {
-    gpioPort = tmp;
-    gpioSend(gpioPort);
-    delayMS(10);
-  }
-  // check display timeout
-  if (onTime) { // only execute if timed display
-    if (since >= 1000) { // 1000ms = 1 second elapsed
-      since = 0;
-      onTime--;
-      if (onTime==0)
-        display(0);
+void loop()
+{
+    uint8_t tmp;
+    // look for serial data input
+    if (serialAvailable())
+    {
+        tmp = serialBlockingRead();
+        if (tmp != MATRIX_COMMAND_PREFIX)
+        {
+            virtualWrite(tmp);  // not a command, just print the text!
+        }
+        else
+        {
+            parseCommand();   // it marks a command, parse it!
+        }
     };
-  };
+    // when not waiting on serial, poll for input port changes
+    // ~laxy interrupt and debounce.
+    tmp = gpioRead();
+    if (tmp!=gpioPort)
+    {
+        gpioPort = tmp;
+        gpioSend(gpioPort);
+        delayMS(10);
+    }
+    // check display timeout
+    if (onTime)   // only execute if timed display
+    {
+        if (since >= 1000)   // 1000ms = 1 second elapsed
+        {
+            since = 0;
+            onTime--;
+            if (onTime==0)
+                display(0);
+        };
+    };
 }
 
 //parse Serial command, triggered by receiving comand prefix character, 0xFE
-void parseCommand() {
-  uint8_t a, b;
-  uint8_t cmd = serialBlockingRead(); // read the command byte
-  switch (cmd) { // get the command byte and process
+void parseCommand()
+{
+    uint8_t a, b;
+    uint8_t cmd = serialBlockingRead(); // read the command byte
+    switch (cmd)   // get the command byte and process
+    {
     case MATRIX_DISPLAY_ON_TIMED:
-      a = serialBlockingRead();
-      onTime = (a&0x80) ? a&0x7F : a*60;  // MSB==0: 0-127 minutes, MSB==0: 1-27 seconds
-      since = 0;
+        a = serialBlockingRead();
+        onTime = (a&0x80) ? a&0x7F : a*60;  // MSB==0: 0-127 minutes, MSB==0: 1-27 seconds
+        since = 0;
     case MATRIX_DISPLAY_ON:
-      display(1);
-      break;
+        display(1);
+        break;
     case MATRIX_DISPLAY_OFF:
-      display(0);
-      break;
+        display(0);
+        break;
     case MATRIX_SETSAVE_BRIGHTNESS:
     case MATRIX_SET_BRIGHTNESS:
-      brightness = serialBlockingRead();
-      if (cmd==MATRIX_SETSAVE_BRIGHTNESS)
-        eeSave(BACKLIGHT_BRIGHTNESS_ADDR,brightness);
-      display(1);
-      break;
+        brightness = serialBlockingRead();
+        if (cmd==MATRIX_SETSAVE_BRIGHTNESS)
+            eeSave(BACKLIGHT_BRIGHTNESS_ADDR,brightness);
+        display(1);
+        break;
     case MATRIX_SETSAVE_CONTRAST:
     case MATRIX_SET_CONTRAST:
-      contrast = serialBlockingRead();
-      if (cmd==MATRIX_SETSAVE_CONTRAST)
-        eeSave(CONTRAST_ADDR,contrast);
-      display(1);
-      break;
+        contrast = serialBlockingRead();
+        if (cmd==MATRIX_SETSAVE_CONTRAST)
+            eeSave(CONTRAST_ADDR,contrast);
+        display(1);
+        break;
     case MATRIX_HOME:
-      virtualCursorPosition(0,0,ABSOLUTE);
-      break;
+        virtualCursorPosition(0,0,ABSOLUTE);
+        break;
     case MATRIX_CLEAR:
-      virtualClear();
-      break;
+        virtualClear();
+        break;
     case MATRIX_AUTOSCROLL_OFF: // even value
     case MATRIX_AUTOSCROLL_ON:  // odd value
-      // autoscroll flag is just LSB that happens to corrolate with cmd LSB
-      if ((cmd&1)!=(EEPROM.read(SCROLLMODE_ADDR)&1))
-        EEPROM.write(SCROLLMODE_ADDR, EEPROM.read(SCROLLMODE_ADDR)^1); // toggle LSB
-      break;
+        // autoscroll flag is just LSB that happens to corrolate with cmd LSB
+        if ((cmd&1)!=(EEPROM.read(SCROLLMODE_ADDR)&1))
+            EEPROM.write(SCROLLMODE_ADDR, EEPROM.read(SCROLLMODE_ADDR)^1); // toggle LSB
+        break;
     case MATRIX_SETCURSOR_POSITION:
-      a = serialBlockingRead();
-      a = (a>COLS) ? COLS : a;
-      b = serialBlockingRead();
-      b = (b>ROWS) ? ROWS : b;
-      virtualCursorPosition(a,b,ABSOLUTE);
-      break;
+        a = serialBlockingRead();
+        a = (a>COLS) ? COLS : a;
+        b = serialBlockingRead();
+        b = (b>ROWS) ? ROWS : b;
+        virtualCursorPosition(a,b,ABSOLUTE);
+        break;
     case MATRIX_MOVECURSOR_BACK:
-      virtualCursorPosition(-1,0,RELATIVE);
-      break;
+        virtualCursorPosition(-1,0,RELATIVE);
+        break;
     case MATRIX_MOVECURSOR_FORWARD:
-      virtualCursorPosition(1,0,RELATIVE);
-      break;
+        virtualCursorPosition(1,0,RELATIVE);
+        break;
     case MATRIX_UNDERLINECURSOR_ON:
-      lcd.cursor();
-      break;
+        lcd.cursor();
+        break;
     case MATRIX_BLOCKCURSOR_OFF:
     case MATRIX_UNDERLINECURSOR_OFF:
-      lcd.noCursor();
-      lcd.noBlink();
-      break;
+        lcd.noCursor();
+        lcd.noBlink();
+        break;
     case MATRIX_BLOCKCURSOR_ON:
-      lcd.blink();
-      break;
+        lcd.blink();
+        break;
     case MATRIX_CHANGESPLASH:
-      // assume Splash Screen has been written to virtual display (LCD), save to EEPROM, wait ~ 0.5sec
-      for (uint8_t y=0; y<ROWS; y++) {
-        for (uint8_t x=0; x<COLS; x++) {
-          eeSave(SPLASH_ADDR + y*COLS + x, virtualDisplay[y][x]);
+        // assume Splash Screen has been written to virtual display (LCD), save to EEPROM, wait ~ 0.5sec
+        for (uint8_t y=0; y<ROWS; y++)
+        {
+            for (uint8_t x=0; x<COLS; x++)
+            {
+                eeSave(SPLASH_ADDR + y*COLS + x, virtualDisplay[y][x]);
+            };
         };
-      };
-      break;
+        break;
     case MATRIX_SPLASH_DELAY:
-      a = serialBlockingRead();
-      eeSave(SPLASH_DELAY_ADDR,a);
-      break;
+        a = serialBlockingRead();
+        eeSave(SPLASH_DELAY_ADDR,a);
+        break;
     case MATRIX_BAUDRATE:
-      a = serialBlockingRead();
-      switch (a) {
-        case 0x53: setBaud(1200); break;
-        case 0x29: setBaud(2400); break;
-        case 0xCf: setBaud(4800); break;
-        case 0x67: setBaud(9600); break;
-        case 0x33: setBaud(19200); break;
-        case 0x22: setBaud(28800); break;
-        case 0x19: setBaud(38400); break;
-        case 0x10: setBaud(57600); break;
-        case 0x08: setBaud(115200); break;
-        default: setBaud(9600);
-      };
-      break;
+        a = serialBlockingRead();
+        switch (a)
+        {
+        case 0x53:
+            setBaud(1200);
+            break;
+        case 0x29:
+            setBaud(2400);
+            break;
+        case 0xCf:
+            setBaud(4800);
+            break;
+        case 0x67:
+            setBaud(9600);
+            break;
+        case 0x33:
+            setBaud(19200);
+            break;
+        case 0x22:
+            setBaud(28800);
+            break;
+        case 0x19:
+            setBaud(38400);
+            break;
+        case 0x10:
+            setBaud(57600);
+            break;
+        case 0x08:
+            setBaud(115200);
+            break;
+        default:
+            setBaud(9600);
+        };
+        break;
     case MATRIX_CUSTOM_CHARACTER:
-      a = serialBlockingRead();
-      defineCustomChar(a, 255);
-      break;
+        a = serialBlockingRead();
+        defineCustomChar(a, 255);
+        break;
     case MATRIX_SAVECUSTOMCHAR:
-      a = serialBlockingRead();
-      b = serialBlockingRead();
-      defineCustomChar(b, a);
-      break;
+        a = serialBlockingRead();
+        b = serialBlockingRead();
+        defineCustomChar(b, a);
+        break;
     case MATRIX_LOADCUSTOMCHARBANK:
-      a = serialBlockingRead();
-      loadCustomCharBank(a);
-      break;
+        a = serialBlockingRead();
+        loadCustomCharBank(a);
+        break;
     case MATRIX_GPIO_READANDMASK:
-      gpioMask = serialBlockingRead();
-      eeSave(GPIO_MASK_ADDR,gpioMask);
+        gpioMask = serialBlockingRead();
+        eeSave(GPIO_MASK_ADDR,gpioMask);
     case MATRIX_GPIO_READ:
-      gpioPort = gpioRead();  // update, otherwise a mask change may cause an output on next check
-      gpioSend(gpioPort);     // return current state
-      break;
+        gpioPort = gpioRead();  // update, otherwise a mask change may cause an output on next check
+        gpioSend(gpioPort);     // return current state
+        break;
     case MATRIX_GPIO_OFF:
-      a = serialBlockingRead()-1;
-      if (a > 3) return;
-      digitalWrite(GPIO[a], LOW);
-      break;
+        a = serialBlockingRead()-1;
+        if (a > 3) return;
+        digitalWrite(GPIO[a], LOW);
+        break;
     case MATRIX_GPIO_ON:
-      a = serialBlockingRead()-1;
-      if (a > 3) return;
-      digitalWrite(GPIO[a], HIGH);
-      break;
+        a = serialBlockingRead()-1;
+        if (a > 3) return;
+        digitalWrite(GPIO[a], HIGH);
+        break;
     case MATRIX_GPIO_START_STATE:
-      a = serialBlockingRead()-1;
-      b = serialBlockingRead();
-      if (a > 3) return;
-      gpioPinMode(a,b); // set current pinMode and save to EEPROM
-      break;
+        a = serialBlockingRead()-1;
+        b = serialBlockingRead();
+        if (a > 3) return;
+        gpioPinMode(a,b); // set current pinMode and save to EEPROM
+        break;
     case EXTENDED_DISABLE_BAUD_SPLSH:
         a = serialBlockingRead();
         eeSave(BAUD_SPLASH_DISABLE, a);
         break;
     case EXTENDED_RGBBACKLIGHTSAVE:
     case EXTENDED_RGBBACKLIGHT:
-      red = serialBlockingRead();
-      green = serialBlockingRead();
-      blue = serialBlockingRead();
-      if (cmd==EXTENDED_RGBBACKLIGHTSAVE) {
-        eeSave(BACKLIGHT_R_ADDR,red);
-        eeSave(BACKLIGHT_G_ADDR,green);
-        eeSave(BACKLIGHT_B_ADDR,blue);
-      };
-      display(1);
-      break;
+        red = serialBlockingRead();
+        green = serialBlockingRead();
+        blue = serialBlockingRead();
+        if (cmd==EXTENDED_RGBBACKLIGHTSAVE)
+        {
+            eeSave(BACKLIGHT_R_ADDR,red);
+            eeSave(BACKLIGHT_G_ADDR,green);
+            eeSave(BACKLIGHT_B_ADDR,blue);
+        };
+        display(1);
+        break;
     case EXTENDED_SETSIZE:
-      a = serialBlockingRead();
-      b = serialBlockingRead();
-      setSize(a, b);
-      break;
+        a = serialBlockingRead();
+        b = serialBlockingRead();
+        setSize(a, b);
+        break;
     case EXTENDED_SCOLLMODE:
-      a = serialBlockingRead();  // bit 0: autoscroll, bit 1: scroll after
-      eeSave(SCROLLMODE_ADDR,a);
-      break;
+        a = serialBlockingRead();  // bit 0: autoscroll, bit 1: scroll after
+        eeSave(SCROLLMODE_ADDR,a);
+        break;
     case EXTENDED_SCALERGBBACKLIGHT:  // onetime display type calibrate
-      eeSave(SCALERED_ADDR,serialBlockingRead());
-      eeSave(SCALEGREEN_ADDR,serialBlockingRead());
-      eeSave(SCALEBLUE_ADDR,serialBlockingRead());
-      display(1);
-      break;
+        eeSave(SCALERED_ADDR,serialBlockingRead());
+        eeSave(SCALEGREEN_ADDR,serialBlockingRead());
+        eeSave(SCALEBLUE_ADDR,serialBlockingRead());
+        display(1);
+        break;
     case EXTENDED_DEBUG:
-      cmdFlags = serialBlockingRead();     // define command debug flags
-      if (cmdFlags&DUMPVD)              // test for immediate virtual display dump
-        dumpVirtualDisplay(1);
-      break;
+        cmdFlags = serialBlockingRead();     // define command debug flags
+        if (cmdFlags&DUMPVD)              // test for immediate virtual display dump
+            dumpVirtualDisplay(1);
+        break;
     case EXTENDED_DUMP_EEPROM:
-      a = serialBlockingRead(); // first page
-      b = serialBlockingRead(); // last page
-      dumpEEPROM(a,b);
-      break;
+        a = serialBlockingRead(); // first page
+        b = serialBlockingRead(); // last page
+        dumpEEPROM(a,b);
+        break;
     case EXTENDED_EDIT_EEPROM:
-      a = serialBlockingRead(); // page
-      DEBUGTERM.spf(F("EEPROM Edit..."));
-      dumpEEPROM(a,a);
-      for (uint8_t j=0;j<EEPROM_PAGE_SIZE;j++)
-        eeSave(a*EEPROM_PAGE_SIZE+j,serialBlockingRead()); // data
-      DEBUGTERM.spf(F("EEPROM Verify..."));
-      dumpEEPROM(a,a);
-      break;
+        a = serialBlockingRead(); // page
+        DEBUGTERM.spf(F("EEPROM Edit..."));
+        dumpEEPROM(a,a);
+        for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
+            eeSave(a*EEPROM_PAGE_SIZE+j,serialBlockingRead()); // data
+        DEBUGTERM.spf(F("EEPROM Verify..."));
+        dumpEEPROM(a,a);
+        break;
     case EXTENDED_CODE_TEST:
-      break;
-  };
+        break;
+    };
 }
 
-void dumpEEPROM(uint8_t firstPage, uint8_t lastPage) {
-  for (uint8_t i=firstPage;i<=lastPage;i++) {
-    DEBUGTERM.spf(F("EEPROM[0x%04X]: "),i);
-    for (uint8_t j=0;j<EEPROM_PAGE_SIZE;j++) {
-      DEBUGTERM.spf(F(" 0x%02X"),EEPROM.read(i*EEPROM_PAGE_SIZE+j));
+void dumpEEPROM(uint8_t firstPage, uint8_t lastPage)
+{
+    for (uint8_t i=firstPage; i<=lastPage; i++)
+    {
+        DEBUGTERM.spf(F("EEPROM[0x%04X]: "),i);
+        for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
+        {
+            DEBUGTERM.spf(F(" 0x%02X"),EEPROM.read(i*EEPROM_PAGE_SIZE+j));
+        };
+        DEBUGTERM.spf(F("\n"));
     };
-    DEBUGTERM.spf(F("\n"));
-  };
 }
 
 // loads a character bank from EEPROM into RAM
-void loadCustomCharBank(uint8_t bank) {
-  uint8_t newChar[8];
-  if (bank > CUSTOM_CHARACTER_BANKS-1) return;
-  int16_t addr = CUSTOMCHARBANKS_ADDR + (bank<<6);
-  for (uint8_t loc = 0; loc < 8; loc++) {
-    for (uint8_t i=0; i<8; i++)
-     newChar[i] = EEPROM.read(addr+(loc<<3)+i);
-    lcd.createChar(loc, newChar);
-  }
+void loadCustomCharBank(uint8_t bank)
+{
+    uint8_t newChar[8];
+    if (bank > CUSTOM_CHARACTER_BANKS-1) return;
+    int16_t addr = CUSTOMCHARBANKS_ADDR + (bank<<6);
+    for (uint8_t loc = 0; loc < 8; loc++)
+    {
+        for (uint8_t i=0; i<8; i++)
+            newChar[i] = EEPROM.read(addr+(loc<<3)+i);
+        lcd.createChar(loc, newChar);
+    }
 }
 
 // creates a custom character at loc (0-7) in bank (0-3) or in RAM (bank=255)
-void defineCustomChar(uint8_t loc, uint8_t bank) {
-  uint8_t newChar[8];
-  for (uint8_t i=0; i<8; i++) {
-     newChar[i] = serialBlockingRead();
-  }
-  if (bank > 3) {
-    lcd.createChar(loc, newChar);   // save in RAM
-  }
-  else {  // save it to EEPROM
-    if (loc > 7)
-      return;
-    int16_t addr = CUSTOMCHARBANKS_ADDR + (bank<<6) + (loc<<3);
+void defineCustomChar(uint8_t loc, uint8_t bank)
+{
+    uint8_t newChar[8];
     for (uint8_t i=0; i<8; i++)
-      eeSave(addr+i,newChar[i]);
-  }
+    {
+        newChar[i] = serialBlockingRead();
+    }
+    if (bank > 3)
+    {
+        lcd.createChar(loc, newChar);   // save in RAM
+    }
+    else    // save it to EEPROM
+    {
+        if (loc > 7)
+            return;
+        int16_t addr = CUSTOMCHARBANKS_ADDR + (bank<<6) + (loc<<3);
+        for (uint8_t i=0; i<8; i++)
+            eeSave(addr+i,newChar[i]);
+    }
 }
 
-uint32_t getBaud() {
-  uint32_t b;
-  b = EEPROM.read(BAUDRATE_ADDR);     //MS byte
-  b <<= 8;
-  b |= EEPROM.read(BAUDRATE_ADDR+1);
-  b <<= 8;
-  b |= EEPROM.read(BAUDRATE_ADDR+2);  // LS byte
-  return b;
+uint32_t getBaud()
+{
+    uint32_t b;
+    b = EEPROM.read(BAUDRATE_ADDR);     //MS byte
+    b <<= 8;
+    b |= EEPROM.read(BAUDRATE_ADDR+1);
+    b <<= 8;
+    b |= EEPROM.read(BAUDRATE_ADDR+2);  // LS byte
+    return b;
 }
 
-void setBaud(uint32_t baudrate) {
-  if (getBaud()!=baudrate) {
-    eeSave(BAUDRATE_ADDR, baudrate >> 16);
-    eeSave(BAUDRATE_ADDR+1, baudrate >> 8);
-    eeSave(BAUDRATE_ADDR+2, baudrate & 0xFF);
-  }
-  USB.begin(baudrate);
-  UART.begin(baudrate);
-  pinMode(PD2,INPUT_PULLUP);  // the UART is a little noisy without a pullup
+void setBaud(uint32_t baudrate)
+{
+    if (getBaud()!=baudrate)
+    {
+        eeSave(BAUDRATE_ADDR, baudrate >> 16);
+        eeSave(BAUDRATE_ADDR+1, baudrate >> 8);
+        eeSave(BAUDRATE_ADDR+2, baudrate & 0xFF);
+    }
+    USB.begin(baudrate);
+    UART.begin(baudrate);
+    pinMode(PD2,INPUT_PULLUP);  // the UART is a little noisy without a pullup
 }
 
-int serialAvailable() {
-  return max(USB.available(), UART.available());
+int serialAvailable()
+{
+    return max(USB.available(), UART.available());
 }
 
-uint8_t serialBlockingRead() {
-  uint8_t timeout = EEPROM.read(SERIAL_TIMEOUT);
-  uint8_t s = 0;
-  if (timeout) {
-    while (!serialAvailable()) {      // only wait until timeout
-      delayMS(1);
-      if (timeout--==0) return 0;
+uint8_t serialBlockingRead()
+{
+    uint8_t timeout = EEPROM.read(SERIAL_TIMEOUT);
+    uint8_t s = 0;
+    if (timeout)
+    {
+        while (!serialAvailable())        // only wait until timeout
+        {
+            delayMS(1);
+            if (timeout--==0) return 0;
+        };
+    }
+    else
+    {
+        while (!serialAvailable());       // wait indefinitely
     };
-  } else {
-    while (!serialAvailable());       // wait indefinitely
-  };
-  uint8_t c = 0;
-  if (USB.available()) {
-    c = USB.read();
-  } else if (UART.available()) {
-    c = UART.read();
-    s = 1;
-  };
-  if (cmdFlags&ECHOCHARS)
-    DEBUGTERM.spf(F("%s RX: '%c' [%d] (0x%02X)\n"),(s)?"UART":"USB",(c<32)?' ':c,c,c);
-  return c;
+    uint8_t c = 0;
+    if (USB.available())
+    {
+        c = USB.read();
+    }
+    else if (UART.available())
+    {
+        c = UART.read();
+        s = 1;
+    };
+    if (cmdFlags&ECHOCHARS)
+        DEBUGTERM.spf(F("%s RX: '%c' [%d] (0x%02X)\n"),(s)?"UART":"USB",(c<32)?' ':c,c,c);
+    return c;
 }
 
 // sets the virtual display size to match lcd hardware
-void setSize(uint8_t c, uint8_t r) {
-  eeSave(ROWS_ADDR, r);
-  eeSave(COLS_ADDR, c);
-  COLS = c;
-  ROWS = r;
+void setSize(uint8_t c, uint8_t r)
+{
+    eeSave(ROWS_ADDR, r);
+    eeSave(COLS_ADDR, c);
+    COLS = c;
+    ROWS = r;
 }
 
 // turns LCD display on or off, call to refresh too
-void display(uint8_t state) {
-  if (state) {
-    // turn on, which means updating analog control values
-    analogWrite(CONTRASTPIN, 255-contrast); // contrast behavior is inverted
-    // normalize the LEDs brightnesses
-    uint8_t r = map(red, 0, 255, 0, EEPROM.read(SCALERED_ADDR));
-    uint8_t g = map(green, 0, 255, 0, EEPROM.read(SCALEGREEN_ADDR));
-    uint8_t b = map(blue, 0, 255, 0, EEPROM.read(SCALEBLUE_ADDR));
-    r = map(r, 0, 255, 0, brightness);
-    g = map(g, 0, 255, 0, brightness);
-    b = map(b, 0, 255, 0, brightness);
-    // set the backlight
-    analogWrite(REDLITE, r);
-    analogWrite(GREENLITE, g);
-    analogWrite(BLUELITE, b);
-  } else {
-    // turn backlights off
-    analogWrite(REDLITE, 0);
-    analogWrite(GREENLITE, 0);
-    analogWrite(BLUELITE, 0);
-  }
+void display(uint8_t state)
+{
+    if (state)
+    {
+        // turn on, which means updating analog control values
+        analogWrite(CONTRASTPIN, 255-contrast); // contrast behavior is inverted
+        // normalize the LEDs brightnesses
+        uint8_t r = map(red, 0, 255, 0, EEPROM.read(SCALERED_ADDR));
+        uint8_t g = map(green, 0, 255, 0, EEPROM.read(SCALEGREEN_ADDR));
+        uint8_t b = map(blue, 0, 255, 0, EEPROM.read(SCALEBLUE_ADDR));
+        r = map(r, 0, 255, 0, brightness);
+        g = map(g, 0, 255, 0, brightness);
+        b = map(b, 0, 255, 0, brightness);
+        // set the backlight
+        analogWrite(REDLITE, r);
+        analogWrite(GREENLITE, g);
+        analogWrite(BLUELITE, b);
+    }
+    else
+    {
+        // turn backlights off
+        analogWrite(REDLITE, 0);
+        analogWrite(GREENLITE, 0);
+        analogWrite(BLUELITE, 0);
+    }
 }
 
 // virtual display clear...
-void virtualClear() {
-    for (uint8_t y=0; y <ROWS; y++) {
-       for (uint8_t x=0; x<COLS; x++) {
-         virtualDisplay[y][x] = ' ';
-       }
-    lcd.clear();  // includes 'home'
-    delayMS(2);   // give it a little more time
-    virtualCursorPosition(1,1,ABSOLUTE); // clear includes home, but sync virtual
-    vScroll = 0;
+void virtualClear()
+{
+    for (uint8_t y=0; y <ROWS; y++)
+    {
+        for (uint8_t x=0; x<COLS; x++)
+        {
+            virtualDisplay[y][x] = ' ';
+        }
+        lcd.clear();  // includes 'home'
+        delayMS(2);   // give it a little more time
+        virtualCursorPosition(1,1,ABSOLUTE); // clear includes home, but sync virtual
+        vScroll = 0;
     }
 }
 
 // virtual display positioning...
-void virtualCursorPosition(int8_t col, int8_t row, bool positioning) {
-  if (positioning==RELATIVE){
-    // assumes only moves +/-1 row or column at a time, i.e. by character
-    vX += col; vY += row;   // used for backspace, scrolling
-  }
-  else {
-    // c,r: one-based; x,y: zero-based
-    vX = col-1; vY = row-1; // absolute positioning
-  };
-  if (vX < 0) { vX =+ COLS; vY -= 1; };
-  if (vY < 0) { vY += ROWS; };
-  if (vX >= COLS) { vX = 0; vY += 1; };
-  if (vY >= ROWS) {
-    vY = 0;
-    vScroll = EEPROM.read(SCROLLMODE_ADDR); // can only be set here
-  };
-  lcd.setCursor(vX,vY);  // physical positioning
+void virtualCursorPosition(int8_t col, int8_t row, bool positioning)
+{
+    if (positioning==RELATIVE)
+    {
+        // assumes only moves +/-1 row or column at a time, i.e. by character
+        vX += col;
+        vY += row;   // used for backspace, scrolling
+    }
+    else
+    {
+        // c,r: one-based; x,y: zero-based
+        vX = col-1;
+        vY = row-1; // absolute positioning
+    };
+    if (vX < 0)
+    {
+        vX =+ COLS;
+        vY -= 1;
+    };
+    if (vY < 0)
+    {
+        vY += ROWS;
+    };
+    if (vX >= COLS)
+    {
+        vX = 0;
+        vY += 1;
+    };
+    if (vY >= ROWS)
+    {
+        vY = 0;
+        vScroll = EEPROM.read(SCROLLMODE_ADDR); // can only be set here
+    };
+    lcd.setCursor(vX,vY);  // physical positioning
 }
 
 // virtual display scroll...
-void virtualScroll(uint8_t mode) {
-  uint8_t c;
-  // autoscroll on AND (mode==(vScroll&2); mode:0->before, mode:2->after
-  if ((vScroll&SCROLLAUTO) && (mode==(vScroll&SCROLLMODE))) {
-    if (cmdFlags&DUMPENABLE) //debug
-      DEBUGTERM.spf(F("SCROLLED\n"));
-    // scroll the virtualDisplay and LCD...
-    for (uint8_t y=0;y<ROWS;y++) {
-      virtualCursorPosition(1,y+1,ABSOLUTE);  // needed for autowrap off
-      for (uint8_t x=0;x<COLS;x++) {
-        // move characters up a row, fill last row with ' '
-        c = (y!=(ROWS-1)) ? virtualDisplay[y+1][x] : ' ';
-        virtualDisplay[y][x] = c;
-        lcd.write(c);
-      };
+void virtualScroll(uint8_t mode)
+{
+    uint8_t c;
+    // autoscroll on AND (mode==(vScroll&2); mode:0->before, mode:2->after
+    if ((vScroll&SCROLLAUTO) && (mode==(vScroll&SCROLLMODE)))
+    {
+        if (cmdFlags&DUMPENABLE) //debug
+            DEBUGTERM.spf(F("SCROLLED\n"));
+        // scroll the virtualDisplay and LCD...
+        for (uint8_t y=0; y<ROWS; y++)
+        {
+            virtualCursorPosition(1,y+1,ABSOLUTE);  // needed for autowrap off
+            for (uint8_t x=0; x<COLS; x++)
+            {
+                // move characters up a row, fill last row with ' '
+                c = (y!=(ROWS-1)) ? virtualDisplay[y+1][x] : ' ';
+                virtualDisplay[y][x] = c;
+                lcd.write(c);
+            };
+        };
+        virtualCursorPosition(1,ROWS,ABSOLUTE);
+        vScroll = 0; // scroll flag is only cleared here
     };
-    virtualCursorPosition(1,ROWS,ABSOLUTE);
-    vScroll = 0; // scroll flag is only cleared here
-  };
 }
 
 // virtual display output...
-void virtualWrite(char ch) {
-  if (ch==LF || ch==CR) {
-    // special exception for new lines either \r or \n, fill to end of line with spaces
-    if (!(vLastNL==CR && ch==LF)) {   // ignore \n when preceded by \r
-      do {
+void virtualWrite(char ch)
+{
+    if (ch==LF || ch==CR)
+    {
+        // special exception for new lines either \r or \n, fill to end of line with spaces
+        if (!(vLastNL==CR && ch==LF))     // ignore \n when preceded by \r
+        {
+            do
+            {
+                virtualWrite(' ');
+            }
+            while (vX != 0);
+            vLastNL = ch;
+            return;
+        };
+    }
+    else if (ch == BS)    // backspace
+    {
+        virtualCursorPosition(-1,0,RELATIVE);
         virtualWrite(' ');
-      } while (vX != 0);
-    vLastNL = ch;
-    return;
-    };
-  }
-  else if (ch == BS) {  // backspace
-    virtualCursorPosition(-1,0,RELATIVE);
-    virtualWrite(' ');
-    virtualCursorPosition(-1,0,RELATIVE);
-  }
-  else {
-    // its a plain character to write to the LCD...
-    // scrolling before write rather than after preserves all lines of scrolling display
-    virtualScroll(SCROLLBEFORE);
-    virtualDisplay[vY][vX] = ch;
-    lcd.write(ch);
-    virtualCursorPosition(1,0,RELATIVE);
-    // scrolling after write rather than before preserves cursor behavior (Adafruit default)
-    virtualScroll(SCROLLAFTER);
-  }
-  dumpVirtualDisplay(cmdFlags&DUMPENABLE); //debug
+        virtualCursorPosition(-1,0,RELATIVE);
+    }
+    else
+    {
+        // its a plain character to write to the LCD...
+        // scrolling before write rather than after preserves all lines of scrolling display
+        virtualScroll(SCROLLBEFORE);
+        virtualDisplay[vY][vX] = ch;
+        lcd.write(ch);
+        virtualCursorPosition(1,0,RELATIVE);
+        // scrolling after write rather than before preserves cursor behavior (Adafruit default)
+        virtualScroll(SCROLLAFTER);
+    }
+    dumpVirtualDisplay(cmdFlags&DUMPENABLE); //debug
 }
 
 // virtual display dump to DEBUGTERM
-void dumpVirtualDisplay(uint8_t dump) {
-  if (dump) {
-    DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
-    for (uint8_t i=0; i <ROWS; i++)
-      DEBUGTERM.spf(F("|%#s|\n"),COLS,virtualDisplay[i]);
-    DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
-    DEBUGTERM.spf(F("  vX:%i, vY:%i, vScroll:%i\n"),vX,vY,vScroll);
-  };
+void dumpVirtualDisplay(uint8_t dump)
+{
+    if (dump)
+    {
+        DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
+        for (uint8_t i=0; i <ROWS; i++)
+            DEBUGTERM.spf(F("|%#s|\n"),COLS,virtualDisplay[i]);
+        DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
+        DEBUGTERM.spf(F("  vX:%i, vY:%i, vScroll:%i\n"),vX,vY,vScroll);
+    };
 }
 
-// additional support for GPIO...
+// additional support for GPIO
 // sets the pinMode of a GPIO and updates EEPROM
 // bit: 0-3, GPIO_1-GPIO_4, respectively
 // mode: 0x00:OUT LOW, 0x01:OUT HIGH, 0x10: INPUT, 0x10: INPUT_PULLUP
-void gpioPinMode(uint8_t bit, uint8_t mode) {
-  switch (mode) {
+void gpioPinMode(uint8_t bit, uint8_t mode)
+{
+    switch (mode)
+    {
     case 0x00:
-      pinMode(GPIO[bit],OUTPUT);
-      digitalWrite(GPIO[bit],0);
-      break;
+        pinMode(GPIO[bit],OUTPUT);
+        digitalWrite(GPIO[bit],0);
+        break;
     case 0x01:
-      pinMode(GPIO[bit],OUTPUT);
-      digitalWrite(GPIO[bit],1);
-      break;
+        pinMode(GPIO[bit],OUTPUT);
+        digitalWrite(GPIO[bit],1);
+        break;
     case 0x10:
-      pinMode(GPIO[bit],INPUT);
-      break;
+        pinMode(GPIO[bit],INPUT);
+        break;
     default:
-      pinMode(GPIO[bit],INPUT_PULLUP);
-      mode = 0x11;
-  }
-  eeSave(GPIO_START_STATE_ADDR+bit,mode); // update EEPROM
+        pinMode(GPIO[bit],INPUT_PULLUP);
+        mode = 0x11;
+    }
+    eeSave(GPIO_START_STATE_ADDR+bit,mode); // update EEPROM
 }
 
-// read all the GPIO pins as a port...
-uint8_t gpioRead() {
-  uint8_t p = 0;
-  p = digitalRead(GPIO[3]);
-  p = p<<1 | digitalRead(GPIO[2]);
-  p = p<<1 | digitalRead(GPIO[1]);
-  p = p<<1 | digitalRead(GPIO[0]);
-  p = (p&gpioMask)^(gpioMask>>4);
-  return p;
+// read all the GPIO pins as a port
+uint8_t gpioRead()
+{
+    uint8_t p = 0;
+    p = digitalRead(GPIO[3]);
+    p = p<<1 | digitalRead(GPIO[2]);
+    p = p<<1 | digitalRead(GPIO[1]);
+    p = p<<1 | digitalRead(GPIO[0]);
+    p = (p&gpioMask)^(gpioMask>>4);
+    return p;
 }
 
 // report GPIO port state to USB and UART
-void gpioSend(uint8_t p) {
-  USB.spf(F("#0x%02X\n"),p);
-  UART.spf(F("#0x%02X\n"),p);
+void gpioSend(uint8_t p)
+{
+    USB.spf(F("#0x%02X\n"),p);
+    UART.spf(F("#0x%02X\n"),p);
 }
 
 // all EEPORM write checked to reduce wear
-void eeSave(uint16_t addr, uint8_t value) {
-  if (value != EEPROM.read(addr))
-    EEPROM.write(addr, value);
+void eeSave(uint16_t addr, uint8_t value)
+{
+    if (value != EEPROM.read(addr))
+        EEPROM.write(addr, value);
 }

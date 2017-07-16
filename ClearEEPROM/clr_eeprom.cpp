@@ -24,64 +24,77 @@ void loop();
 uint8_t clearEEPROM(uint8_t passes);
 void dumpEEPROM();
 void eeSave(uint8_t addr, uint8_t value);
-void setup() {
-  USB.begin(9600);
+void setup()
+{
+    USB.begin(9600);
 }
 
-void loop() {
-  uint8_t fails = 0;
-  uint8_t x = 0;
-  // look for serial data input to trigger erase
-  if (USB.available()) {
-    while (USB.available())
-      x = USB.read();
-    passes++;
-    USB.println(F("EEPROM erase... "));
-    USB.print(F("PASS: "));
-    USB.println(passes);
-    fails = clearEEPROM(1);
-    if (fails) {
-      USB.print(F("EEPROM erase Failed!: "));
-      USB.println(fails);
-      USB.println(F("locations"));
-      dumpEEPROM();
-    } else {
-      USB.print(F("EEPROM erase sucessful!"));
-      if (x=='y')
-        dumpEEPROM();
+void loop()
+{
+    uint8_t fails = 0;
+    uint8_t x = 0;
+    // look for serial data input to trigger erase
+    if (USB.available())
+    {
+        while (USB.available())
+            x = USB.read();
+        passes++;
+        USB.println(F("EEPROM erase... "));
+        USB.print(F("PASS: "));
+        USB.println(passes);
+        fails = clearEEPROM(1);
+        if (fails)
+        {
+            USB.print(F("EEPROM erase Failed!: "));
+            USB.println(fails);
+            USB.println(F("locations"));
+            dumpEEPROM();
+        }
+        else
+        {
+            USB.print(F("EEPROM erase sucessful!"));
+            if (x=='y')
+                dumpEEPROM();
+        };
     };
-  };
 }
 
 // erase the entire EEPROM for a clean initialization...
-uint8_t clearEEPROM(uint8_t passes) {
-  uint8_t fails = 0;
-  for (uint8_t p=0;p<passes;p++) {                          // make n passes
-    fails = 0;
-    for (uint16_t i=0;i<EEPROM_SIZE;i++) {                  // make a pass
-      eeSave(i,0xFF);
-      if (EEPROM.read(i)!=0xFF) fails++;                    // verify
+uint8_t clearEEPROM(uint8_t passes)
+{
+    uint8_t fails = 0;
+    for (uint8_t p=0; p<passes; p++)                          // make n passes
+    {
+        fails = 0;
+        for (uint16_t i=0; i<EEPROM_SIZE; i++)                  // make a pass
+        {
+            eeSave(i,0xFF);
+            if (EEPROM.read(i)!=0xFF) fails++;                    // verify
+        };
+        if (fails==0) break;                                      // quit if successful pass
     };
-  if (fails==0) break;                                      // quit if successful pass
-  };
-  return fails;
+    return fails;
 }
 
-void dumpEEPROM() {
-  for (uint8_t p=0;p<EEPROM_PAGES;p++) {
-    USB.print(F("EEPROM["));
-    USB.print(p,HEX);
-    USB.print(F("]: "));
-    for (uint8_t j=0;j<EEPROM_PAGE_SIZE;j++) {
-      USB.print((j)?',':' ');
-      USB.print(EEPROM.read(p*EEPROM_PAGE_SIZE+j),HEX);
+void dumpEEPROM()
+{
+    for (uint8_t p=0; p<EEPROM_PAGES; p++)
+    {
+        USB.print(F("EEPROM["));
+        USB.print(p,HEX);
+        USB.print(F("]: "));
+        for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
+        {
+            USB.print((j)?',':' ');
+            USB.print(EEPROM.read(p*EEPROM_PAGE_SIZE+j),HEX);
+        };
+        USB.println();
     };
-    USB.println();
-  };
 }
 
 // all EEPORM write checked to reduce wear
-void eeSave(uint8_t addr, uint8_t value) {
-  if (value != EEPROM.read(addr))
-    EEPROM.write(addr, value);
+void eeSave(uint8_t addr, uint8_t value)
+{
+    if (value != EEPROM.read(addr))
+        EEPROM.write(addr, value);
 }
