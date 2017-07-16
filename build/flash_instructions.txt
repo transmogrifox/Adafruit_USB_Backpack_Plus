@@ -1,0 +1,13 @@
+Commands
+
+To read EEPROM...
+
+avrdude -P /dev/ttyACM0 -c AVR109 -p usb162 -U eeprom:r:eeprom.hex:h
+
+To read FLASH...
+
+avrdude -P /dev/ttyACM0 -c AVR109 -p usb162 -U flash:r:original.hex
+
+To write FLASH...
+
+avrdude -P /dev/ttyACM0 -c AVR109 -p usb162 -U flash:w:BackpackPlus.hex
