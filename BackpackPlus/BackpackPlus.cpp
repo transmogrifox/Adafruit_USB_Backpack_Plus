@@ -185,6 +185,8 @@ LiquidCrystal lcd(RS, RW, EN, D4, D5, D6, D7);    // LCD interface
 uint8_t GPIO[] = {GPIO0, GPIO1, GPIO2, GPIO3};    // GPIO bits
 uint8_t gpioPort = 0;                             // last GPIO pin states
 uint8_t gpioMask = 0xFF;                          // read mask default
+uint8_t gpioDebounceBuf[4];                       // Circular buf
+uint8_t gpioDBBfIndex = 0;                        // Circular buf index
 // display definition...
 uint8_t COLS = EEPROM.read(COLS_ADDR);
 uint8_t ROWS = EEPROM.read(ROWS_ADDR);
@@ -227,6 +229,13 @@ void setup()
     }
     gpioMask = EEPROM.read(GPIO_MASK_ADDR);
     gpioPort = gpioRead(); // get intial state after setting up pins
+
+    gpioDBBfIndex = 0;
+    for(uint8_t i=0; i<4; i++)
+    {
+        gpioDebounceBuf[i] = gpioPort;
+    }
+
     // for the initial 'screen flash' we want to use default settings:
     lcd.begin(COLS,ROWS);
     loadCustomCharBank(0);
@@ -301,15 +310,28 @@ void loop()
             parseCommand();   // it marks a command, parse it!
         }
     };
+
     // when not waiting on serial, poll for input port changes
-    // ~laxy interrupt and debounce.
-    tmp = gpioRead();
-    if (tmp!=gpioPort)
+    // debouce -- 4 consecutive reads with identical state
+    gpioDebounceBuf[gpioDBBfIndex] = gpioRead();
+    tmp = 0;
+    for(uint8_t i=0; i<4; i++)
     {
-        gpioPort = tmp;
+        if(gpioDebounceBuf[gpioDBBfIndex] != gpioDebounceBuf[i])
+            tmp = 1;
+    }
+    if ((tmp == 0) && (gpioPort != gpioDebounceBuf[gpioDBBfIndex]))
+    {
+        //Toggle state
+        gpioPort = gpioDebounceBuf[gpioDBBfIndex];
+        //Ship it
         gpioSend(gpioPort);
         delayMS(10);
     }
+    //cycle circ buf
+    if( ++gpioDBBfIndex >= 4)
+        gpioDBBfIndex = 0;
+
     // check display timeout
     if (onTime)   // only execute if timed display
     {
