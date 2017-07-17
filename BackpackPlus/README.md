@@ -34,6 +34,7 @@ This following describe the basic aspects of code changes:
 * General purpose inputs added to outputs with masking to select active bits and invert data.
 * Support for timed display on state.
 * More informative 'blink' message with version; only on LCD display.
+* Extended command option to disable 'blink' message.
 * Load custom characters bank 0 as default. With definitions in lcd_init.txt file.
 * Included debug features.
 * New command codes.
@@ -59,6 +60,8 @@ This following describe the basic aspects of code changes:
 
     USB/Ser RGB Bkpk
       9600 8N1 +17B1
+
+**Blink Message Disable**  When a project development is complete and it is time to deploy it for user interaction the blink message detracts from the overall user experience.  The command code 0x43 followed by a '''0x00''' (blink config) or a '''0x01''' (don't blink config) allows this message to be suppressed on power-up.  That way the LCD will only display what you specifically designed it to display.
 
 **Debug**: Compiler conditionals have been removed so a number of debug items are included using the Debug command.
 
@@ -200,6 +203,7 @@ AF | ChangeSplash | 0x40 | Writes splash screen text to EEPROM.
 NEW | SaveSplash | 0x40 | Save the display screen to EEPROM as splash screen.
 NEW | SplashDelay | 0x41 | Save and save splash screen display time, ~0.1s units.
 ALL | DisplayOnTimed | 0x42 | Same as Adafruit DisplayOn command, but supports timeout value.
+NEW | DisableConfigBlink | 0x43 | Issue 0x01 to suppress display of config data on power-up.  Issue 0x00 if you want this feature enabled.
 NEW | DisplayOn | 0x45 | Turn display on (indefinately) with no timeout.
 ALL | DisplayOff | 0x46 | Turn display off.
 ALL | SetCursor | 0x47 | Move cursor to (COL,ROW).
