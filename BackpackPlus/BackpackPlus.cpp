@@ -209,6 +209,8 @@ uint8_t brightness = 0xFF;
 uint8_t contrast = 0xC0;
 uint16_t onTime = 0;  // seconds
 elapsedMillis since = 0;
+elapsedMillis dbounce_timer = 0;
+uint8_t retransmit_timer = 0;
 uint8_t cmdFlags = 0x00;                          // command mode debug flags
 
 
@@ -286,6 +288,9 @@ void setup()
     };
     for (uint8_t d=0; d<EEPROM.read(SPLASH_DELAY_ADDR); d++)
         delayMS(100);
+    since = 0;
+    dbounce_timer = 0;
+    retransmit_timer = 0;
     virtualClear();
 }
 
@@ -313,24 +318,34 @@ void loop()
 
     // when not waiting on serial, poll for input port changes
     // debouce -- 4 consecutive reads with identical state
-    gpioDebounceBuf[gpioDBBfIndex] = gpioRead();
-    tmp = 0;
-    for(uint8_t i=0; i<4; i++)
+    if(dbounce_timer >= 2)
     {
-        if(gpioDebounceBuf[gpioDBBfIndex] != gpioDebounceBuf[i])
-            tmp = 1;
+        dbounce_timer = 0;
+        gpioDebounceBuf[gpioDBBfIndex] = gpioRead();
+        tmp = 0;
+        for(uint8_t i=0; i<4; i++)
+        {
+            if(gpioDebounceBuf[gpioDBBfIndex] != gpioDebounceBuf[i])
+                tmp = 1;
+        }
+
+        if(retransmit_timer == 0)
+        {
+            if ((tmp == 0) && (gpioPort != gpioDebounceBuf[gpioDBBfIndex]))
+            {
+                //Toggle state
+                gpioPort = gpioDebounceBuf[gpioDBBfIndex];
+                //Ship it
+                gpioSend(gpioPort);
+                retransmit_timer = 50;
+            }
+        } else
+            retransmit_timer--;
+            
+        //cycle circ buf
+        if( ++gpioDBBfIndex >= 4)
+            gpioDBBfIndex = 0;
     }
-    if ((tmp == 0) && (gpioPort != gpioDebounceBuf[gpioDBBfIndex]))
-    {
-        //Toggle state
-        gpioPort = gpioDebounceBuf[gpioDBBfIndex];
-        //Ship it
-        gpioSend(gpioPort);
-        delayMS(10);
-    }
-    //cycle circ buf
-    if( ++gpioDBBfIndex >= 4)
-        gpioDBBfIndex = 0;
 
     // check display timeout
     if (onTime)   // only execute if timed display
@@ -339,7 +354,7 @@ void loop()
         {
             since = 0;
             onTime--;
-            if (onTime==0)
+            if (onTime == 0)
                 display(0);
         };
     };
@@ -499,7 +514,15 @@ void parseCommand()
         break;
     case EXTENDED_DISABLE_BAUD_SPLSH:
         a = serialBlockingRead();
-        eeSave(BAUD_SPLASH_DISABLE, a);
+        switch(a)
+        {
+            case 0:
+            case 1:
+                eeSave(BAUD_SPLASH_DISABLE, a);
+                break;
+            default:
+                break;  //anything else will have no effect
+        }
         break;
     case EXTENDED_RGBBACKLIGHTSAVE:
     case EXTENDED_RGBBACKLIGHT:
