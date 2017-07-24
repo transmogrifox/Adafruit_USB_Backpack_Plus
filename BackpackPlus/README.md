@@ -7,7 +7,7 @@ Adafruit USB Serial LCD with IO and Other Enhancements
 
 This code is a complete rewrite of the Adafruit RGB Backpack code. This code adds GPIO, specifically input capability to the Backpack functionality. This allows the LCD to function as a simple remote terminal with up to 4 "key/button" inputs and/or "LED indicators" able to communicate over a simple 2 wire serial interface. The code also incorporates a number of other enhancements detailed below and in CanyonCasa's [README](https://github.com/CanyonCasa/BackpackPlus/blob/master/BackpackPlus/BACKPACK_PLUS_README.md).
 
-This was forked from 
+This was forked from
 [CanyonCasa's Backpack Plus](https://github.com/CanyonCasa/BackpackPlus)
 . Follow the link for the full description.  Below has been abbreviated to documentation of code changes upon CanyonCasa's work and a re-iteration of the command summary table (since this is convenient to have all in one place).  
 
@@ -78,6 +78,7 @@ ALL | SaveBrightness | 0x98 | Set backlight brightness and save to EEPROM.
 CHG | SetBrightness | 0x99 | Set backlight brightness, not saved to EEPROM. Use SaveBrightness to write EEPROM.
 ALL | LoadCustomCharacters | 0xC0 | Load characters from EEPROM bank, 0-3 into character RAM.
 ALL | SaveCustomCharacter | 0xC1 | Create custom character #0-7 with 8 bytes of data saved to EEPROM bank 0-3.
+NEW | AudioLevelMeter | 0xD6 | 2 args: Channel (0-7), Level (0-1F).
 ALL | GPIOStartState | 0xC3 | Sets the "initial" state of the GPIO pin, default "input pullup".
 CHG | SaveRGB | 0xD0 | Sets the backlight red, green, and blue levels (0-255) and saves to EEPROM. Same as Adafruit Set Backlight Color.
 ALL | SaveSize | 0xD1 | Set display size up to 20x4, saved to EEPROM. Only needed once.
