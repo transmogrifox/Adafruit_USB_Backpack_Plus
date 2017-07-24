@@ -5,10 +5,10 @@ Adafruit USB Serial LCD with IO and Other Enhancements
 
 ## Summary
 
-This code is a complete rewrite of the Adafruit RGB Backpack code. This code adds GPIO, specifically input capability to the Backpack functionality. This allows the LCD to function as a simple remote terminal with up to 4 "key/button" inputs and/or "LED indicators" able to communicate over a simple 2 wire serial interface. The code also incorporates a number of other enhancements detailed below.
+This code is a complete rewrite of the Adafruit RGB Backpack code. This code adds GPIO, specifically input capability to the Backpack functionality. This allows the LCD to function as a simple remote terminal with up to 4 "key/button" inputs and/or "LED indicators" able to communicate over a simple 2 wire serial interface. The code also incorporates a number of other enhancements detailed below and in CanyonCasa's [README](https://github.com/CanyonCasa/BackpackPlus/blob/master/BackpackPlus/BACKPACK_PLUS_README.md).
 
 This was forked from 
-[CanyonCasa's Backpack Plus](https://github.com/CanyonCasa/BackpackPlus/blob/master/BackpackPlus/BACKPACK_PLUS_README.md)
+[CanyonCasa's Backpack Plus](https://github.com/CanyonCasa/BackpackPlus)
 . Follow the link for the full description.  Below has been abbreviated to documentation of code changes upon CanyonCasa's work and a re-iteration of the command summary table (since this is convenient to have all in one place).  
 
 ## Code Changes Overview Notes
@@ -16,30 +16,33 @@ This was forked from
 This following describe the basic aspects of code changes:
 
 * Extended command option to disable 'blink' message.
-* Python support scripts with encoded text string support. See [CanyonCasa Repository](https://github.com/CanyonCasa/BackpackPlus) for Python scripts.
+* Python support scripts with encoded text string support. See [CanyonCasa Repository](https://github.com/CanyonCasa/BackpackPlus/tree/master/PythonScripts) for Python scripts.
+* Improvement to switch debounce routine, including re-transmit timer so there aren't a barrage of messages from a shaky finger or a particularly bad switch.
 
 ## Functional Code Changes
 **Blink Message Disable**  When a project development is complete and it is time to deploy it for user interaction the blink message detracts from the overall user experience.  This fork improves upon the CanyonCasa by providing a command for the user decide if this should be displayed (but it is displayed by default if EEPROM has been erased).
 
-###Usage Cases:
+### Usage Cases:
 
 ```0xFE 0x43 0x00``` Don't disable the blink message (display it on startup).
 
 ```0xFE 0x43 0x01``` Disable the blink message.  In this mode it skips straight to the splash screen.  
 
-####Related Notes:
+#### Related Notes:
 
 The ability to overwrite the splash screen with spaces in the original Adafruit code is intact.  CanyonCasa's revision allows splash delay to be changed so the startup time can also be shortened when splash is not used.
 
 With this current fork it is now possible to start up with a blank screen and nothing is displayed until the user specifically sends something to be displayed.
 
+**Switch Debounce Improvements** This was re-implemented with a variation on a method presented by [Jack Ganssle](http://www.eng.utah.edu/~cs5780/debouncing.pdf), from the heading "**Handling Multiple Inputs**" (*Listing 3*).  The main deviation is to set a timer to avoid re-transmitting the switch condition rapidly on a shakey finger or accidentally pressing 2 buttons nearly simultaneously.  Also from the data Ganssle presented it was evident that only 4 records of the same state on 3ms sampling intervals are likely needed to cover the majority of bounce cases while providing acceptable EMI immunity. This is particularly true as the re-transmit timer provides a function not unlike the latch Ganssle presented in *Figure1: The SR Debouncer*.
+
+My test for behavior was tapping and sliding a wire on and around the switch input pads, and inserting into the hole and wiggling it back and forth.  There was not excessive traffic on the serial port as every transmission represented a valid change of state.  Perhaps in a future revision a command can be added to change the retransmit delay.
+
 ## Other Backpack Issues (not fixed)
 
-**TX and RX Lines**: Note, pin 3 of CN3 is incorrectly labeled on the board silkscreen as TX when it actually (correctly) connects to RX. This may be confusing when wiring to separate TX and RX pins, which are labeled correctly.
->Response:  This is confusing either way.  Some like to think of TX and RX as the pins to which you connect on the DTE.  Some like to think of this with reference to the device itself (DCE). In the end the product documentation should clarify which TX and RX are being referenced.
+**TX and RX Lines** [HARDWARE]: Note, pin 3 of CN3 is incorrectly labeled on the board silkscreen as TX when it actually (correctly) connects to RX. This may be confusing when wiring to separate TX and RX pins, which are labeled correctly.
 
->An industry standard would be to identify TX and RX according to the DTE, so the convention chosen by Adafruit is more standard.
-
+Note from Transmogrifox:  The schematic labels these correctly so this appears as a mismatch between PCB silkscreen text and net names.  It's hard to guess whether this was intentional (one interface considered DTE and the other a DCE) or unintentional.  At the very least the documentation for the product should identify this and define it.
 
 ### Command Summary Table
 
