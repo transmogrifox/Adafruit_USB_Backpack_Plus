@@ -112,10 +112,12 @@ All text above must be included in any redistribution
 #define MATRIX_SAVECUSTOMCHAR       0xC1            // 10 args: bank, char #, 8 bytes data
 #define MATRIX_GPIO_START_STATE     0xC3            // 2 args: pin, state
 #define EXTENDED_DISABLE_BAUD_SPLSH 0x43            // 1 arg: (0) Display baud rate on startup, (1) disable baud rate display
+#define EXTENDED_AUDIO_LEVEL_METER  0xD6            // 2 args: [Channel 0-7, or >7 disabled] [Level (0 to ROWS)]
+                                                    // Level > ROWS flashes backlight red (clipping) but restores orig color scheme.
 #define EXTENDED_RGBBACKLIGHTSAVE   0xD0            // 3 args: R G B
 #define EXTENDED_SETSIZE            0xD1            // 2 args: Cols, Rows
 #define EXTENDED_TESTBAUD           0xD2            // Adafruit Backpack
-#define EXTENDED_SCOLLMODE          0xD3            // 1 arg: mode, 0: off, 1: on before, 2: off, 3: on after
+#define EXTENDED_SCROLLMODE         0xD3            // 1 arg: mode, 0: off, 1: on before, 2: off, 3: on after
 #define EXTENDED_SCALERGBBACKLIGHT  0xD4            // 3 args: R G B
 #define EXTENDED_RGBBACKLIGHT       0xD5            // 3 args: R G B
 #define EXTENDED_DEBUG              0xDC            // 1 arg: flags;
@@ -159,7 +161,7 @@ All text above must be included in any redistribution
 void setup();
 void loop();
 void parseCommand();
-void dumpEEPROM(uint8_t firstPage, uint8_t lastPage);
+//void dumpEEPROM(uint8_t firstPage, uint8_t lastPage);
 void loadCustomCharBank(uint8_t bank);
 void defineCustomChar(uint8_t loc, uint8_t bank);
 uint32_t getBaud();
@@ -173,7 +175,7 @@ void virtualClear();
 void virtualCursorPosition(int8_t col, int8_t row, bool positioning);
 void virtualScroll(uint8_t mode);
 void virtualWrite(char ch);
-void dumpVirtualDisplay(uint8_t dump);
+//void dumpVirtualDisplay(uint8_t dump);
 void gpioPinMode(uint8_t bit, uint8_t mode);
 uint8_t gpioRead();
 void gpioSend(uint8_t p);
@@ -213,6 +215,19 @@ elapsedMillis dbounce_timer = 0;
 uint8_t retransmit_timer = 0;
 uint8_t cmdFlags = 0x00;                          // command mode debug flags
 
+//
+// Audio level meter
+//
+#define METER_STATE_BOTH             0
+#define METER_STATE_TOP              1
+#define METER_STATE_BOTM             2
+uint8_t active_audio_channels = 0; //deactivated by default
+uint8_t audio_level_meter_active = 0;
+uint8_t level_detector_slow[8];
+elapsedMillis audio_meter_timer = 0;
+
+void audioLevelMeter(uint8_t ch);
+void audioLevelMeterInitCustomChars();
 
 // follow Arduino style setup and loop functions
 void setup()
@@ -271,7 +286,7 @@ void setup()
         lcd.clear();
         lcd.spf(F("USB/Ser RGB Bpk+"));
         lcd.setCursor(0,1);
-        lcd.spf(F("CanyonCasa"));
+        lcd.spf(F("Transmogrifox"));
     }
     else
     {
@@ -291,6 +306,12 @@ void setup()
     since = 0;
     dbounce_timer = 0;
     retransmit_timer = 0;
+
+    for(uint8_t i = 0; i < 8; i++)
+        level_detector_slow[i] = i;
+    audio_level_meter_active = 0;
+    active_audio_channels = 0;
+
     virtualClear();
 }
 
@@ -309,12 +330,46 @@ void loop()
         if (tmp != MATRIX_COMMAND_PREFIX)
         {
             virtualWrite(tmp);  // not a command, just print the text!
+            audio_level_meter_active = 0;
         }
         else
         {
             parseCommand();   // it marks a command, parse it!
         }
     };
+
+    // check display timeout
+    if (onTime)   // only execute if timed display
+    {
+        if (since >= 1000)   // 1000ms = 1 second elapsed
+        {
+            since = 0;
+            onTime--;
+            if (onTime == 0)
+                display(0);
+        };
+    };
+
+    //Tick audio level meter
+    if(audio_level_meter_active == 1)
+    {
+        if(audio_meter_timer >= 49)
+        {
+            // Save current cursor positions
+            uint8_t tmpX = vX;
+            uint8_t tmpY = vY;
+            audio_meter_timer = 0;
+            for(uint8_t i = 0; i < 8; i++)
+            {
+                tmp = active_audio_channels;
+                tmp = (tmp >> i);
+                if(tmp & 0x01)
+                    audioLevelMeter(i);
+            }
+            // Restore cursor positions
+            virtualCursorPosition(tmpX,tmpY,ABSOLUTE);
+        }
+    }
 
     // when not waiting on serial, poll for input port changes
     // debouce -- 4 consecutive reads with identical state
@@ -341,23 +396,12 @@ void loop()
             }
         } else
             retransmit_timer--;
-            
+
         //cycle circ buf
         if( ++gpioDBBfIndex >= 4)
             gpioDBBfIndex = 0;
     }
 
-    // check display timeout
-    if (onTime)   // only execute if timed display
-    {
-        if (since >= 1000)   // 1000ms = 1 second elapsed
-        {
-            since = 0;
-            onTime--;
-            if (onTime == 0)
-                display(0);
-        };
-    };
 }
 
 //parse Serial command, triggered by receiving comand prefix character, 0xFE
@@ -409,12 +453,15 @@ void parseCommand()
         b = serialBlockingRead();
         b = (b>ROWS) ? ROWS : b;
         virtualCursorPosition(a,b,ABSOLUTE);
+        audio_level_meter_active = 0;
         break;
     case MATRIX_MOVECURSOR_BACK:
         virtualCursorPosition(-1,0,RELATIVE);
+        audio_level_meter_active = 0;
         break;
     case MATRIX_MOVECURSOR_FORWARD:
         virtualCursorPosition(1,0,RELATIVE);
+        audio_level_meter_active = 0;
         break;
     case MATRIX_UNDERLINECURSOR_ON:
         lcd.cursor();
@@ -521,7 +568,29 @@ void parseCommand()
                 eeSave(BAUD_SPLASH_DISABLE, a);
                 break;
             default:
-                break;  //anything else will have no effect
+                break;  // anything else will have no effect
+        }
+        break;
+    case EXTENDED_AUDIO_LEVEL_METER:
+        a = (uint8_t) serialBlockingRead();
+        if(a < 8) // enables if valid number of channels, else disabled
+        {
+            if(!audio_level_meter_active) //change to special chars
+                audioLevelMeterInitCustomChars();
+            b = 1;
+            b = (b << a);
+            active_audio_channels |= b;
+            b = (uint8_t) serialBlockingRead();
+            if(b > level_detector_slow[a])
+                level_detector_slow[a] = b;
+            audio_level_meter_active = 1;
+        } else // get it out of the buffer but don't do anything with it
+        {
+            b = (uint8_t) serialBlockingRead();
+            if(audio_level_meter_active)
+                loadCustomCharBank(0); // restore to default
+            audio_level_meter_active = 0; //disabled
+            active_audio_channels = 0;
         }
         break;
     case EXTENDED_RGBBACKLIGHTSAVE:
@@ -542,7 +611,7 @@ void parseCommand()
         b = serialBlockingRead();
         setSize(a, b);
         break;
-    case EXTENDED_SCOLLMODE:
+    case EXTENDED_SCROLLMODE:
         a = serialBlockingRead();  // bit 0: autoscroll, bit 1: scroll after
         eeSave(SCROLLMODE_ADDR,a);
         break;
@@ -552,42 +621,42 @@ void parseCommand()
         eeSave(SCALEBLUE_ADDR,serialBlockingRead());
         display(1);
         break;
-    case EXTENDED_DEBUG:
-        cmdFlags = serialBlockingRead();     // define command debug flags
-        if (cmdFlags&DUMPVD)              // test for immediate virtual display dump
-            dumpVirtualDisplay(1);
-        break;
-    case EXTENDED_DUMP_EEPROM:
-        a = serialBlockingRead(); // first page
-        b = serialBlockingRead(); // last page
-        dumpEEPROM(a,b);
-        break;
-    case EXTENDED_EDIT_EEPROM:
-        a = serialBlockingRead(); // page
-        DEBUGTERM.spf(F("EEPROM Edit..."));
-        dumpEEPROM(a,a);
-        for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
-            eeSave(a*EEPROM_PAGE_SIZE+j,serialBlockingRead()); // data
-        DEBUGTERM.spf(F("EEPROM Verify..."));
-        dumpEEPROM(a,a);
-        break;
+    // case EXTENDED_DEBUG:
+    //     cmdFlags = serialBlockingRead();     // define command debug flags
+    //     if (cmdFlags&DUMPVD)              // test for immediate virtual display dump
+    //         dumpVirtualDisplay(1);
+    //     break;
+    // case EXTENDED_DUMP_EEPROM:
+    //     a = serialBlockingRead(); // first page
+    //     b = serialBlockingRead(); // last page
+    //     dumpEEPROM(a,b);
+    //     break;
+    // case EXTENDED_EDIT_EEPROM:
+    //     a = serialBlockingRead(); // page
+    //     DEBUGTERM.spf(F("EEPROM Edit..."));
+    //     dumpEEPROM(a,a);
+    //     for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
+    //         eeSave(a*EEPROM_PAGE_SIZE+j,serialBlockingRead()); // data
+    //     DEBUGTERM.spf(F("EEPROM Verify..."));
+    //     dumpEEPROM(a,a);
+    //     break;
     case EXTENDED_CODE_TEST:
         break;
     };
 }
 
-void dumpEEPROM(uint8_t firstPage, uint8_t lastPage)
-{
-    for (uint8_t i=firstPage; i<=lastPage; i++)
-    {
-        DEBUGTERM.spf(F("EEPROM[0x%04X]: "),i);
-        for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
-        {
-            DEBUGTERM.spf(F(" 0x%02X"),EEPROM.read(i*EEPROM_PAGE_SIZE+j));
-        };
-        DEBUGTERM.spf(F("\n"));
-    };
-}
+// void dumpEEPROM(uint8_t firstPage, uint8_t lastPage)
+// {
+//     for (uint8_t i=firstPage; i<=lastPage; i++)
+//     {
+//         DEBUGTERM.spf(F("EEPROM[0x%04X]: "),i);
+//         for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
+//         {
+//             DEBUGTERM.spf(F(" 0x%02X"),EEPROM.read(i*EEPROM_PAGE_SIZE+j));
+//         };
+//         DEBUGTERM.spf(F("\n"));
+//     };
+// }
 
 // loads a character bank from EEPROM into RAM
 void loadCustomCharBank(uint8_t bank)
@@ -835,20 +904,135 @@ void virtualWrite(char ch)
         // scrolling after write rather than before preserves cursor behavior (Adafruit default)
         virtualScroll(SCROLLAFTER);
     }
-    dumpVirtualDisplay(cmdFlags&DUMPENABLE); //debug
+    //dumpVirtualDisplay(cmdFlags&DUMPENABLE); //debug
 }
 
-// virtual display dump to DEBUGTERM
-void dumpVirtualDisplay(uint8_t dump)
+// // virtual display dump to DEBUGTERM
+// void dumpVirtualDisplay(uint8_t dump)
+// {
+//     if (dump)
+//     {
+//         DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
+//         for (uint8_t i=0; i <ROWS; i++)
+//             DEBUGTERM.spf(F("|%#s|\n"),COLS,virtualDisplay[i]);
+//         DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
+//         DEBUGTERM.spf(F("  vX:%i, vY:%i, vScroll:%i\n"),vX,vY,vScroll);
+//     };
+// }
+
+// Audio Level meter
+// Valid channels are up to 2xROWS.  1/2 a row is left, other 1/2 is right
+// Level max is 0 to (COLS)
+// Any level larger than level max will indicate clipping
+void audioLevelMeterInitCustomChars()
 {
-    if (dump)
+    uint8_t newChar[8];
+    for (uint8_t i=0; i<8; i++)
     {
-        DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
-        for (uint8_t i=0; i <ROWS; i++)
-            DEBUGTERM.spf(F("|%#s|\n"),COLS,virtualDisplay[i]);
-        DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
-        DEBUGTERM.spf(F("  vX:%i, vY:%i, vScroll:%i\n"),vX,vY,vScroll);
-    };
+        newChar[i] = 0xFF;
+    }
+    newChar[3] = 0x00;
+    newChar[4] = 0x00;
+    lcd.createChar(METER_STATE_BOTH, newChar);   // save in RAM
+
+    for (uint8_t i=0; i<3; i++)
+    {
+        newChar[i] = 0xFF;
+    }
+    for (uint8_t i=3; i<8; i++)
+    {
+        newChar[i] = 0x00;
+    }
+    lcd.createChar(METER_STATE_TOP, newChar);   // save in RAM
+
+    for (uint8_t i=0; i<5; i++)
+    {
+        newChar[i] = 0x00;
+    }
+    for (uint8_t i=5; i<8; i++)
+    {
+        newChar[i] = 0xFF;
+    }
+    lcd.createChar(METER_STATE_BOTM, newChar);   // save in RAM
+
+}
+
+void audioLevelMeter(uint8_t ch)
+{
+    uint8_t ldrow = 1 + (ch >> 1);  // which row to write
+    uint8_t pk = level_detector_slow[ch];
+    uint8_t dpk = 0;
+    virtualCursorPosition(1,ldrow,ABSOLUTE);
+
+    //
+    // Clipping detection
+    //
+
+    //Temporarily save color scheme
+    uint8_t r, g, b;
+    r = red;
+    g = green;
+    b = blue;
+    //flash red if clipping
+    if(level_detector_slow[ch] >= COLS)
+    {
+        red = 255;
+        green = 0;
+        blue = 0;
+    }
+    if(pk > 0x1F)
+        pk = 0x1F;
+    display(1);
+    //Restore the color
+    red = r;
+    green = g;
+    blue = b;
+
+    // peak decay
+    dpk = (pk << 3);
+    dpk -= pk;
+    pk = (dpk >> 3);
+
+    level_detector_slow[ch] = pk;  //Then save it for the next time around
+
+    //next work out what custom characters need to be created
+    uint8_t ldch = (ch & (0xFE));
+    uint8_t pkl = level_detector_slow[ldch];
+    uint8_t pkh = level_detector_slow[ldch+1];
+    uint8_t meter_state = ' ';
+    virtualCursorPosition(1,ldrow,ABSOLUTE);
+
+    for(uint8_t k = 0; k < COLS; k++)
+    {
+        //determine meter state
+        if((pkl > 0) && (pkh > 0))
+        {
+            meter_state = METER_STATE_BOTH;
+        }
+        else if ((pkl == 0) && (pkh == 0))
+        {
+            meter_state = ' ';
+        }
+        else if ((pkl < 1) && (pkh > 0))
+        {
+            meter_state = METER_STATE_TOP;
+        }
+        else if ((pkl > 0) && (pkh < 1))
+        {
+            meter_state = METER_STATE_BOTM;
+        }
+        else
+        {
+            meter_state = ' ';
+        }
+
+        if(pkl > 0) pkl--;
+        if(pkh > 0) pkh--;
+
+        //if(k == 1) virtualCursorPosition(1,ldrow,ABSOLUTE);
+        virtualWrite(meter_state);
+    }
+
 }
 
 // additional support for GPIO
