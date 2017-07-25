@@ -352,7 +352,7 @@ void loop()
     //Tick audio level meter
     if(audio_level_meter_active == 1)
     {
-        if(audio_meter_timer >= 30) //close to 30 fps
+        if(audio_meter_timer >= 40) //25 fps
         {
             // Save current cursor positions
             uint8_t tmpX = vX;
