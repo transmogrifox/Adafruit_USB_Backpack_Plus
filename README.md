@@ -1,61 +1,49 @@
 # Adafruit USB Backpack Plus
-A fork of CanyonCasa USB Backpack Plus with main additional feature being an audio level meter.
+A fork of @CanyonCasa USB Backpack Plus with noteworthy additional features being an audio level meter and a command to optionally disable config blink on power up.
 
 See https://github.com/CanyonCasa/BackpackPlus
 
-## Audio Level Meter:
-Allows writing 1 stereo channel / 2 mono channels per row to the LCD as audio level meter.
-On a 20x4 meter this is 4 stereo / 8 mono channels.
+If you are doing your own hacking it is recommended to base your development off the @CanyonCasa repo if the audio level meter is not of interest.  The config blink feature is a trivial thing to add if this is of interest.
 
-### Usage
-Command: 0xD6 [CHANNEL] [LEVEL]
+## ClearEEPROM
+This directory contains a C++ program for erasing the device EEPROM.  The compiled .hex file is also included so building this for the AT90 will not be necessary.
 
-* CHANNEL: Range is 0 - 7. 
-* DISABLE: Write audio level meter with a channel greater than 7 to disable the audio level meter.
-* LEVEL:   Range is 0 to 255.
-  * NORMAL: The nominal input range is 0 to number of columns (16 on a 16x2 display, 20 on 20x4 display)
-  * CLIPPING INDICATION: Writing a level greater than number of columns will cause the display to flash RED until it decays below number of columns.  More overdrive increases the amount of time that clipping indication persists.  
-    * Severe clipping will result in an alarming (attention-grabbing) red flickering.  
-    * Mild clipping will appear as a glitch too short to even perceive RED.  If perception of red is desired on all clipping than the user-side commands will need to add more overdrive to anything intended to indicate clipping.
-  * MAXIMUM MEANINGFUL LEVEL: Writing a level greater than 0x1F will be clipped to 0x1F. Numbers above 0x1F are handled gracefully, but this will not cause clipping indication to persist for a longer duration than 0x1F.
+This normally will be a one-time usage.  Enter the ClearEEPROM directory and have this command ready to go on the command line:
 
-The audio level meter has an exponential peak decay function built-in so your application
-doesn't need to burn cycles on this.  You only need to keep track of a max value over a
-certain time interval and send that level mapped into the range 0 : nColumns
-to avoid clipping indication, or 0 : (nColumns + overdrive).  
+```avrdude -P [COM_PORT] -c AVR109 -p usb162 -U flash:w:EEPROM_Eraser.hex```
 
-The slow response time of the LCD matrix helps average what would otherwise appear as a "blocky" response.  The LCD "ghosting" part of the visual effect and has been considered in the timing of the meter's decay rate.
+Short the RESET pin on the USB backpack to ground.   The LCD will go red indicating the bootloader is active.  Quickly hit enter on the command line to issue the avrdude command.  If you don't issue the avrdude command before the USB backpack boots then you will have to reset again and get the command out before the usb backpack leaves the bootloader mode.
 
-You can send text at the same time the audio level meter is active.  It will overwrite anything on the rows it is using, but it will leave the other inactive rows alone. Each time through its loop it saves and restores the cursor position. 
+Once the USB Backpack has been successfully programmed, then unplug the USB cable and power up the USB backpack.  It will start up and flash for a while during the time it is erasing EEPROM.  Once the activity ceases you can move onto programming the Backpack Plus code.
 
-*Example:*
-```0xFE 0xD6 0x02 0x0A```
+## BackpackPlus:
+This is the directory containing the C++ program that runs on the [AT90USB162](http://www.atmel.com/images/doc7707.pdf).
 
-This will write a level to the peak detector and enable the audio level meter on channel 2, which is the third channel.  Issuing this command once will cause the bottom bar of row 2 to fill up to the 11th element and then decay back to zero.  If it is sent repeatedly, then it will keep bouncing back up from wherever it is at the time the next command is written.
+This file is built from the Teensy 1.0 core code and Arduino liraries which are located in the build/teensyplus and build/libraries directories respectively.  @CanyonCasa organized the build system and created a Makefile (makefile found in the build directory).
 
-### Additional Notes:
+If you don't intend to modify and build the code, then the following instructions will suffice:
 
-The audio level meter creates custom characters on the fly in spaces 0 through 2.  When it is inactivated it restores custom characters from bank 0 from EEPROM.  If you are using a different custom character bank then you will need to issue the command to specifically load this custom character bank before you send text using custom characters from a bank other than bank 0.
+Enter the Backpack Plus directory and have this command ready to go on the command line:
+```avrdude -P [COM_PORT] -c AVR109 -p usb162 -U flash:w:BackpackPlus.hex```
 
-Sending text disables the audio level meter. If you send a level to the meter, then send text, but don't immediately follow up with another level then the meter will appear "paused".  If you immediately follow up text with another level to the meter then the interruption will go un-noticed.
+As with the EEPROM erase instructions, short the RESET pin to ground and immediately press enter on your keyboard to flash the BackpackPlus image to your USB backpack.
 
-If you want to disable the audio level meter and leave the screen blank there are a few ways to do this, depending on the effect you want:
-* Cease updating the level meter long enough for all to active channels to decay to zero. This will take about 1/2 second to go from max to min. After the delay send text or an audio level meter command with an out-of-range channel number to disable it.
-* Disable the audio meter and then write all spaces to the lines that were used by the level meter.
-* Disable the audio level meter, send the clear screen command and optionally move cursor position to home.
+## build
+This directory contains the makefile and libraries necessary to build BackpackPlus/BackpackPlus.cpp.  If you intend to modify and build the program then the following will be useful information.
 
-This may change as the code is improved, but for now it seems easy enough to leave some of this clean-up-after-yourself stuff to the user.
+* Make certain you have gnu-make, avr-gcc, avr-libc and avrdude installed.
+    * Instructions for setting up your AVR cross-compiler and build system is not in the scope of this README.
+    * If you need help for setting up the build system, quick searching reveals hits on many good quality how-to's and tutorials for AVR development.
+    * Below instructions assume you are working from a console (cmd.exe, bash, csh, etc.)
+* Modify BackpackPlus/BackpackPlus.cpp as desired.
+* Edit the makefile '''PORT = /dev/ttyACM0''' to match the port your USB backpack shows up on (on Windows ```COM3```, for example)
+* Enter into the build directory and issue ```make```.
+* Have the command ```make burn``` ready to go on the command line.
+* As with prior instructions, short RESET pin to ground on the USB backpack.
+* Immediately press enter to issue the ```make burn``` command.
+* Check that avrdude finishes with success.
 
-## Config blink disable option:
-A nice "house-keeping feature" is a command to enable or disable baud / config splash on startup.
-
-Command: 0x43, one argument 0x00 or 0x01
-
-*Example:*
-
-```0xFE 0x43 0x00```  (default) Enables the display of config data on power-up.  For this to be guaranteed default assumes EEPROM has been erased before you startup the new image the first time.
-
-```0xFE 0x43 0x01```  Disables the display of config data on power-up.
+**Note** The current revision of the code uses almost 100% of the device so you will need to remove features to add more features.  To make space for the audio level meter I had to eliminate some of @CanyonCasa 's debug features and incrementally add things back until I couldn't go any further.  For example, if you don't need the audio level meter you can get back a significant amount of space for something else by commenting it out or deleting it.
 
 
-This feature is useful for certain projects where you want to finalize a design implementation in which blinking of the configuration information detracts from the user experience.
+
