@@ -120,7 +120,6 @@ All text above must be included in any redistribution
 #define EXTENDED_SCROLLMODE         0xD3            // 1 arg: mode, 0: off, 1: on before, 2: off, 3: on after
 #define EXTENDED_SCALERGBBACKLIGHT  0xD4            // 3 args: R G B
 #define EXTENDED_RGBBACKLIGHT       0xD5            // 3 args: R G B
-#define EXTENDED_DEBUG              0xDC            // 1 arg: flags;
 #define EXTENDED_DUMP_EEPROM        0xDD            // 2 args: start_page, end_page;
 #define EXTENDED_EDIT_EEPROM        0xDE            // 5 args: page#, byte1, byte2, byte3, byte4
 #define EXTENDED_CODE_TEST          0xDF            // reserved for code testing
@@ -161,7 +160,7 @@ All text above must be included in any redistribution
 void setup();
 void loop();
 void parseCommand();
-//void dumpEEPROM(uint8_t firstPage, uint8_t lastPage);
+void dumpEEPROM(uint8_t firstPage, uint8_t lastPage);
 void loadCustomCharBank(uint8_t bank);
 void defineCustomChar(uint8_t loc, uint8_t bank);
 uint32_t getBaud();
@@ -353,7 +352,7 @@ void loop()
     //Tick audio level meter
     if(audio_level_meter_active == 1)
     {
-        if(audio_meter_timer >= 49)
+        if(audio_meter_timer >= 30) //close to 30 fps
         {
             // Save current cursor positions
             uint8_t tmpX = vX;
@@ -392,15 +391,17 @@ void loop()
                 gpioPort = gpioDebounceBuf[gpioDBBfIndex];
                 //Ship it
                 gpioSend(gpioPort);
-                retransmit_timer = 50;
+                retransmit_timer = 20;
             }
-        } else
+        }
+        else
             retransmit_timer--;
 
         //cycle circ buf
         if( ++gpioDBBfIndex >= 4)
             gpioDBBfIndex = 0;
     }
+
 
 }
 
@@ -621,42 +622,37 @@ void parseCommand()
         eeSave(SCALEBLUE_ADDR,serialBlockingRead());
         display(1);
         break;
-    // case EXTENDED_DEBUG:
-    //     cmdFlags = serialBlockingRead();     // define command debug flags
-    //     if (cmdFlags&DUMPVD)              // test for immediate virtual display dump
-    //         dumpVirtualDisplay(1);
-    //     break;
-    // case EXTENDED_DUMP_EEPROM:
-    //     a = serialBlockingRead(); // first page
-    //     b = serialBlockingRead(); // last page
-    //     dumpEEPROM(a,b);
-    //     break;
-    // case EXTENDED_EDIT_EEPROM:
-    //     a = serialBlockingRead(); // page
-    //     DEBUGTERM.spf(F("EEPROM Edit..."));
-    //     dumpEEPROM(a,a);
-    //     for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
-    //         eeSave(a*EEPROM_PAGE_SIZE+j,serialBlockingRead()); // data
-    //     DEBUGTERM.spf(F("EEPROM Verify..."));
-    //     dumpEEPROM(a,a);
-    //     break;
+    case EXTENDED_DUMP_EEPROM:
+        a = serialBlockingRead(); // first page
+        b = serialBlockingRead(); // last page
+        dumpEEPROM(a,b);
+        break;
+    case EXTENDED_EDIT_EEPROM:
+        a = serialBlockingRead(); // page
+        DEBUGTERM.spf(F("EEPROM Edit..."));
+        dumpEEPROM(a,a);
+        for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
+            eeSave(a*EEPROM_PAGE_SIZE+j,serialBlockingRead()); // data
+        DEBUGTERM.spf(F("EEPROM Verify..."));
+        dumpEEPROM(a,a);
+        break;
     case EXTENDED_CODE_TEST:
         break;
     };
 }
 
-// void dumpEEPROM(uint8_t firstPage, uint8_t lastPage)
-// {
-//     for (uint8_t i=firstPage; i<=lastPage; i++)
-//     {
-//         DEBUGTERM.spf(F("EEPROM[0x%04X]: "),i);
-//         for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
-//         {
-//             DEBUGTERM.spf(F(" 0x%02X"),EEPROM.read(i*EEPROM_PAGE_SIZE+j));
-//         };
-//         DEBUGTERM.spf(F("\n"));
-//     };
-// }
+void dumpEEPROM(uint8_t firstPage, uint8_t lastPage)
+{
+    for (uint8_t i=firstPage; i<=lastPage; i++)
+    {
+        DEBUGTERM.spf(F("EEPROM[0x%04X]: "),i);
+        for (uint8_t j=0; j<EEPROM_PAGE_SIZE; j++)
+        {
+            DEBUGTERM.spf(F(" 0x%02X"),EEPROM.read(i*EEPROM_PAGE_SIZE+j));
+        };
+        DEBUGTERM.spf(F("\n"));
+    };
+}
 
 // loads a character bank from EEPROM into RAM
 void loadCustomCharBank(uint8_t bank)
@@ -907,18 +903,6 @@ void virtualWrite(char ch)
     //dumpVirtualDisplay(cmdFlags&DUMPENABLE); //debug
 }
 
-// // virtual display dump to DEBUGTERM
-// void dumpVirtualDisplay(uint8_t dump)
-// {
-//     if (dump)
-//     {
-//         DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
-//         for (uint8_t i=0; i <ROWS; i++)
-//             DEBUGTERM.spf(F("|%#s|\n"),COLS,virtualDisplay[i]);
-//         DEBUGTERM.spf(F("%#c\n"),COLS+2,'-');
-//         DEBUGTERM.spf(F("  vX:%i, vY:%i, vScroll:%i\n"),vX,vY,vScroll);
-//     };
-// }
 
 // Audio Level meter
 // Valid channels are up to 2xROWS.  1/2 a row is left, other 1/2 is right
